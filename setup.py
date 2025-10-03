@@ -1,0 +1,48 @@
+from setuptools import setup, find_packages
+
+setup(
+    name="energy-forecasting",
+    version="0.1.0",
+    description="Production-grade hourly electricity demand forecasting using EIA-930 data",
+    author="digitalnomad",
+    python_requires=">=3.10",
+    packages=find_packages(where="src"),
+    package_dir={"": "src"},
+    install_requires=[
+        "pandas>=2.2.0",
+        "numpy>=1.26.0",
+        "scikit-learn>=1.5.0",
+        "requests>=2.32.0",
+        "sqlalchemy>=2.0.0",
+        "python-dotenv>=1.0.0",
+        "pyyaml>=6.0.0",
+        "mlflow>=2.15.0",
+        "evidently>=0.4.0",
+        "matplotlib>=3.9.0",
+        "plotly>=5.23.0",
+        "streamlit>=1.37.0",
+        "holidays>=0.53",
+        "pyarrow>=17.0.0",
+        "joblib>=1.4.0",
+        "click>=8.1.0",
+        "tqdm>=4.66.0",
+    ],
+    entry_points={
+        "console_scripts": [
+            "eia-fetch=scripts.fetch_data:main",
+            "eia-ingest=scripts.ingest:main",
+            "eia-train=scripts.train_models:main",
+            "eia-evaluate=scripts.evaluate:main",
+            "eia-monitor=scripts.monitor_drift:main",
+            "eia-dashboard=dashboard.app:main",
+        ],
+    },
+    classifiers=[
+        "Development Status :: 3 - Alpha",
+        "Intended Audience :: Science/Research",
+        "Topic :: Scientific/Engineering :: Artificial Intelligence",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+    ],
+)

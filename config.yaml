@@ -1,0 +1,523 @@
+# Energy Load Forecasting — Master Configuration
+# All values can be overridden via environment variables or CLI flags
+
+# ─────────────────────────────────────────────
+# EIA API
+# ─────────────────────────────────────────────
+eia:
+  base_url: "https://api.eia.gov/v2/electricity/rto/region-data/data/"
+  page_size: 5000           # EIA API max rows per request
+  rate_limit_delay: 0.5     # seconds between paginated requests
+  timeout: 30               # request timeout in seconds
+  retry_attempts: 3
+  retry_backoff: 2.0        # exponential backoff multiplier
+  # Data types to fetch:
+  #   D  = actual hourly demand (MWh)
+  #   DF = EIA's own demand forecast (MWh)  <-- primary benchmark to beat
+  #   NG = net generation (optional exogenous feature)
+  #   TI = total interchange (optional exogenous feature)
+  data_types:
+    - D
+    - DF
+
+# ─────────────────────────────────────────────
+# Balancing Authorities
+# ALL EIA-930 Balancing Authorities, grouped by grid region.
+# Set enabled: true to include in multi-region benchmark run.
+# ─────────────────────────────────────────────
+balancing_authorities:
+
+  # === EASTERN INTERCONNECTION ===
+  - code: PJM
+    name: "PJM Interconnection"
+    region: eastern
+    enabled: true
+    priority: 1   # higher priority = run first in multi-region mode
+
+  - code: MISO
+    name: "Midcontinent Independent System Operator"
+    region: eastern
+    enabled: true
+    priority: 1
+
+  - code: ISNE
+    name: "ISO New England"
+    region: eastern
+    enabled: true
+    priority: 1
+
+  - code: NYIS
+    name: "New York Independent System Operator"
+    region: eastern
+    enabled: true
+    priority: 1
+
+  - code: TVA
+    name: "Tennessee Valley Authority"
+    region: eastern
+    enabled: true
+    priority: 2
+
+  - code: SOCO
+    name: "Southern Company Services"
+    region: eastern
+    enabled: true
+    priority: 2
+
+  - code: DUK
+    name: "Duke Energy Carolinas"
+    region: eastern
+    enabled: true
+    priority: 2
+
+  - code: CPLE
+    name: "Duke Energy Progress East"
+    region: eastern
+    enabled: true
+    priority: 3
+
+  - code: CPLW
+    name: "Duke Energy Progress West"
+    region: eastern
+    enabled: true
+    priority: 3
+
+  - code: FPC
+    name: "Duke Energy Florida"
+    region: eastern
+    enabled: true
+    priority: 3
+
+  - code: FPL
+    name: "Florida Power & Light"
+    region: eastern
+    enabled: true
+    priority: 2
+
+  - code: FMPP
+    name: "Florida Municipal Power Pool"
+    region: eastern
+    enabled: true
+    priority: 3
+
+  - code: GVL
+    name: "Gainesville Regional Utilities"
+    region: eastern
+    enabled: true
+    priority: 4
+
+  - code: HST
+    name: "City of Homestead"
+    region: eastern
+    enabled: true
+    priority: 4
+
+  - code: JEA
+    name: "JEA (Jacksonville Electric Authority)"
+    region: eastern
+    enabled: true
+    priority: 4
+
+  - code: NSB
+    name: "New Smyrna Beach Utilities Commission"
+    region: eastern
+    enabled: true
+    priority: 4
+
+  - code: SEC
+    name: "Seminole Electric Cooperative"
+    region: eastern
+    enabled: true
+    priority: 4
+
+  - code: TAL
+    name: "City of Tallahassee"
+    region: eastern
+    enabled: true
+    priority: 4
+
+  - code: TEC
+    name: "Tampa Electric"
+    region: eastern
+    enabled: true
+    priority: 3
+
+  - code: LGEE
+    name: "Louisville Gas and Electric and Kentucky Utilities"
+    region: eastern
+    enabled: true
+    priority: 3
+
+  - code: OVEC
+    name: "Ohio Valley Electric Corporation"
+    region: eastern
+    enabled: true
+    priority: 4
+
+  - code: SC
+    name: "South Carolina Public Service Authority (Santee Cooper)"
+    region: eastern
+    enabled: true
+    priority: 4
+
+  - code: SCEG
+    name: "Dominion Energy South Carolina"
+    region: eastern
+    enabled: true
+    priority: 4
+
+  - code: SEPA
+    name: "Southeastern Power Administration"
+    region: eastern
+    enabled: true
+    priority: 4
+
+  - code: YAD
+    name: "Alcoa Power Generating (Yadkin)"
+    region: eastern
+    enabled: true
+    priority: 5
+
+  # === TEXAS INTERCONNECTION ===
+  - code: ERCO
+    name: "Electric Reliability Council of Texas (ERCOT)"
+    region: texas
+    enabled: true
+    priority: 1
+
+  # === WESTERN INTERCONNECTION ===
+  - code: CISO
+    name: "California Independent System Operator (CAISO)"
+    region: western
+    enabled: true
+    priority: 1
+
+  - code: SWPP
+    name: "Southwest Power Pool"
+    region: western
+    enabled: true
+    priority: 1
+
+  - code: BPAT
+    name: "Bonneville Power Administration"
+    region: western
+    enabled: true
+    priority: 2
+
+  - code: PACW
+    name: "PacifiCorp West"
+    region: western
+    enabled: true
+    priority: 2
+
+  - code: PACE
+    name: "PacifiCorp East"
+    region: western
+    enabled: true
+    priority: 2
+
+  - code: PSCO
+    name: "Public Service Company of Colorado (Xcel Energy)"
+    region: western
+    enabled: true
+    priority: 2
+
+  - code: WACM
+    name: "Western Area Power Administration - Rocky Mountain Region"
+    region: western
+    enabled: true
+    priority: 3
+
+  - code: WALC
+    name: "Western Area Power Administration - Desert Southwest Region"
+    region: western
+    enabled: true
+    priority: 3
+
+  - code: WAUE
+    name: "Western Area Power Administration - Upper Great Plains East"
+    region: western
+    enabled: true
+    priority: 4
+
+  - code: WAUW
+    name: "Western Area Power Administration - Upper Great Plains West"
+    region: western
+    enabled: true
+    priority: 4
+
+  - code: SPA
+    name: "Southwestern Power Administration"
+    region: western
+    enabled: true
+    priority: 4
+
+  - code: AVA
+    name: "Avista Corporation"
+    region: western
+    enabled: true
+    priority: 3
+
+  - code: AZPS
+    name: "Arizona Public Service Company"
+    region: western
+    enabled: true
+    priority: 2
+
+  - code: BANC
+    name: "Balancing Authority of Northern California"
+    region: western
+    enabled: true
+    priority: 3
+
+  - code: CHPD
+    name: "Public Utility District No. 1 of Chelan County"
+    region: western
+    enabled: true
+    priority: 4
+
+  - code: DEAA
+    name: "Arlington Valley Solar Energy II"
+    region: western
+    enabled: true
+    priority: 5
+
+  - code: DOPD
+    name: "Public Utility District No. 1 of Douglas County"
+    region: western
+    enabled: true
+    priority: 4
+
+  - code: EPE
+    name: "El Paso Electric"
+    region: western
+    enabled: true
+    priority: 3
+
+  - code: GCPD
+    name: "Public Utility District No. 2 of Grant County"
+    region: western
+    enabled: true
+    priority: 4
+
+  - code: GRID
+    name: "Gridforce Energy Management"
+    region: western
+    enabled: true
+    priority: 5
+
+  - code: GRIF
+    name: "Griffith Energy Services"
+    region: western
+    enabled: true
+    priority: 5
+
+  - code: GRMA
+    name: "Gila River Power"
+    region: western
+    enabled: true
+    priority: 5
+
+  - code: GWA
+    name: "NaturEner Power Watch"
+    region: western
+    enabled: true
+    priority: 5
+
+  - code: HGMA
+    name: "New Harquahala Generating Company"
+    region: western
+    enabled: true
+    priority: 5
+
+  - code: IID
+    name: "Imperial Irrigation District"
+    region: western
+    enabled: true
+    priority: 4
+
+  - code: IPCO
+    name: "Idaho Power Company"
+    region: western
+    enabled: true
+    priority: 3
+
+  - code: LDWP
+    name: "Los Angeles Department of Water and Power"
+    region: western
+    enabled: true
+    priority: 2
+
+  - code: NEVP
+    name: "Nevada Power Company (NV Energy)"
+    region: western
+    enabled: true
+    priority: 3
+
+  - code: NWMT
+    name: "Northwestern Energy (Montana-Dakota)"
+    region: western
+    enabled: true
+    priority: 3
+
+  - code: PSEI
+    name: "Puget Sound Energy"
+    region: western
+    enabled: true
+    priority: 3
+
+  - code: SCL
+    name: "Seattle City Light"
+    region: western
+    enabled: true
+    priority: 3
+
+  - code: SRP
+    name: "Salt River Project"
+    region: western
+    enabled: true
+    priority: 2
+
+  - code: TEPC
+    name: "Tucson Electric Power"
+    region: western
+    enabled: true
+    priority: 3
+
+  - code: TIDC
+    name: "Turlock Irrigation District"
+    region: western
+    enabled: true
+    priority: 4
+
+  - code: TPWR
+    name: "City of Tacoma, Department of Public Utilities Light Division"
+    region: western
+    enabled: true
+    priority: 4
+
+  - code: WWA
+    name: "NaturEner Wind Watch"
+    region: western
+    enabled: true
+    priority: 5
+
+  # AEC was removed from EIA-930 but included for completeness
+  - code: AEC
+    name: "PowerSouth Energy Cooperative"
+    region: eastern
+    enabled: false   # Verify availability before enabling
+    priority: 5
+
+# ─────────────────────────────────────────────
+# Data Settings
+# ─────────────────────────────────────────────
+data:
+  start_date: "2022-01-01"
+  end_date: "2023-12-31"
+  min_hours_required: 8760    # 1 year minimum
+  gap_fill_max_hours: 6       # interpolate gaps up to this many hours
+  anomaly_std_threshold: 4.0  # flag values > N std from rolling 168h mean
+  raw_data_dir: "data/raw"
+  processed_data_dir: "data/processed"
+  database_path: "data/energy_forecasting.db"
+
+# ─────────────────────────────────────────────
+# Feature Engineering
+# ─────────────────────────────────────────────
+features:
+  lag_hours: [1, 2, 24, 48, 168]     # 1h, 2h, 1d, 2d, 1w
+  rolling_windows: [24, 168]          # hours: 1-day and 1-week rolling stats
+  fourier_daily_terms: 2              # k=2 sin/cos pairs for 24h seasonality
+  fourier_weekly_terms: 3             # k=3 sin/cos pairs for 168h seasonality
+  use_holidays: true
+  holiday_country: "US"
+
+# ─────────────────────────────────────────────
+# Train / Test Split
+# ─────────────────────────────────────────────
+split:
+  test_fraction: 0.20          # chronological holdout (last 20%)
+  cv_folds: 5                  # TimeSeriesSplit folds for model selection
+  gap_hours: 24                # gap between train and validation in CV folds
+
+# ─────────────────────────────────────────────
+# Models
+# ─────────────────────────────────────────────
+models:
+  ridge:
+    alpha: 1.0
+    fit_intercept: true
+
+  random_forest:
+    n_estimators: 200
+    max_depth: null            # uncapped
+    min_samples_leaf: 5
+    n_jobs: -1
+    random_state: 42
+
+  hist_gradient_boosting:
+    max_iter: 500
+    learning_rate: 0.05
+    max_depth: 6
+    min_samples_leaf: 20
+    l2_regularization: 1.0
+    random_state: 42
+    early_stopping: true
+    validation_fraction: 0.1
+    n_iter_no_change: 20
+
+# ─────────────────────────────────────────────
+# Evaluation
+# ─────────────────────────────────────────────
+evaluation:
+  primary_metric: rmse         # metric used for champion model selection
+  output_path: "data/processed/evaluation_results.csv"
+  # Baseline models to always include in comparison
+  baselines:
+    - persistence
+    - seasonal_naive_168h
+    - eia_df                   # EIA's own forecast — THE benchmark
+
+# ─────────────────────────────────────────────
+# Drift Detection & Retraining
+# ─────────────────────────────────────────────
+monitoring:
+  drift_window_days: 7                  # rolling window for RMSE calculation
+  drift_threshold_pct: 15.0            # % RMSE degradation that triggers alert
+  drift_log_path: "logs/drift_log.jsonl"
+  evidently_reports_dir: "evidence_reports"
+  retrain_on_drift: true
+  retrain_lookback_days: 730           # use last N days for retraining
+  champion_replacement_min_improvement: 2.0  # % RMSE improvement required
+
+# ─────────────────────────────────────────────
+# MLflow
+# ─────────────────────────────────────────────
+mlflow:
+  tracking_uri: "./mlruns"
+  experiment_name: "energy-load-forecasting"
+  run_name_prefix: "eia930"
+
+# ─────────────────────────────────────────────
+# Multi-Region Benchmark
+# ─────────────────────────────────────────────
+benchmark:
+  # Run modes:
+  #   single   — one BA at a time (--region MISO)
+  #   priority — BAs in priority order (1 first, 5 last)
+  #   all      — all enabled BAs in parallel (if resources allow)
+  default_mode: priority
+  max_parallel_regions: 4    # for parallel execution
+  aggregate_results: true    # also fit a model on all BAs combined
+  results_dir: "data/processed/benchmark"
+  summary_path: "data/processed/benchmark/benchmark_summary.csv"
+
+# ─────────────────────────────────────────────
+# Logging
+# ─────────────────────────────────────────────
+logging:
+  level: INFO
+  log_dir: "logs"
+  format: "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
+  datefmt: "%Y-%m-%d %H:%M:%S"
