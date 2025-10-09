@@ -31,7 +31,7 @@ seaborn==0.13.2
 streamlit==1.37.1
 
 # Calendars / holidays
-holidays==0.53
+holidays==0.94
 
 # Notebook
 jupyter==1.0.0
