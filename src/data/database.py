@@ -6,6 +6,7 @@ Tables:
     fuel_type_data   — Hourly generation by fuel type per BA
     interchange_data — Hourly net flow between BA pairs
     sub_ba_data      — Hourly demand by subregion within each BA
+    weather_data     — Hourly weather data per BA from Open-Meteo
     ingest_log       — Audit log of every ingestion run
 
 Usage:
@@ -128,6 +129,29 @@ class SubBaData(Base):
     )
 
 
+class WeatherData(Base):
+    """Hourly weather data from Open-Meteo per Balancing Authority."""
+    __tablename__ = "weather_data"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    period = Column(DateTime(timezone=True), nullable=False)  # UTC timestamp
+    respondent = Column(String(16), nullable=False)  # BA code (MISO, PJM, etc.)
+
+    # Weather fields from Open-Meteo (6 core columns)
+    temp_2m = Column(Float)          # Temperature at 2 meters (°C)
+    dewpoint_2m = Column(Float)      # Dew point temperature (°C)
+    windspeed_10m = Column(Float)    # Wind speed at 10 meters (m/s)
+    solar_irradiance = Column(Float) # Shortwave radiation (W/m²)
+    cloudcover = Column(Float)       # Cloud cover (%)
+    precipitation = Column(Float)    # Precipitation (mm)
+    # Note: apparent_temp and relative_humidity are calculated in feature engineering
+
+    __table_args__ = (
+        UniqueConstraint("period", "respondent", name="uq_weather_period_ba"),
+        Index("ix_weather_respondent_period", "respondent", "period"),
+    )
+
+
 class IngestLog(Base):
     """Audit log of every ingestion run."""
     __tablename__ = "ingest_log"
@@ -205,7 +229,7 @@ def get_session(engine) -> Generator[Session, None, None]:
 
 def get_table_counts(engine) -> dict[str, int]:
     """Return row counts for all main tables."""
-    tables = ["region_data", "fuel_type_data", "interchange_data", "sub_ba_data"]
+    tables = ["region_data", "fuel_type_data", "interchange_data", "sub_ba_data", "weather_data"]
     counts = {}
     with engine.connect() as conn:
         for table in tables:

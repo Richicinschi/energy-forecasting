@@ -45,7 +45,7 @@ EXPECTED_COLS = [
     "sin_hour_1", "cos_hour_1", "sin_hour_2", "cos_hour_2",
     "sin_week_1", "cos_week_1", "sin_week_2", "cos_week_2",
     "sin_week_3", "cos_week_3",
-    "lag_1h", "lag_2h", "lag_24h", "lag_48h", "lag_168h",
+    "lag_24h", "lag_48h", "lag_168h",
     "rolling_mean_24h", "rolling_std_24h",
     "rolling_mean_168h", "rolling_std_168h",
     "wind_pct", "solar_pct", "coal_pct", "ng_pct",
@@ -205,9 +205,10 @@ class TestFeatureMatrixShape:
 
 class TestNoLeakage:
 
-    def test_lag_1h_equals_prior_demand(self, tsta_df):
-        # At position 100, lag_1h should equal demand at position 99
-        assert tsta_df["lag_1h"].iloc[100] == pytest.approx(tsta_df["demand_mw"].iloc[99])
+    def test_no_lag_1h_or_2h(self, tsta_df):
+        # lag_1h and lag_2h have been removed — they leak future data for 24h-ahead
+        assert "lag_1h" not in tsta_df.columns
+        assert "lag_2h" not in tsta_df.columns
 
     def test_lag_24h_equals_t_minus_24(self, tsta_df):
         for pos in (50, 200, 500):
@@ -221,24 +222,27 @@ class TestNoLeakage:
                 tsta_df["demand_mw"].iloc[pos - 168]
             )
 
-    def test_rolling_mean_24h_closed_left(self, tsta_df):
-        # rolling_mean_24h at row T should equal mean of demand[T-24 : T] (excl. T)
+    def test_rolling_mean_24h_anchored_at_t_minus_24(self, tsta_df):
+        # rolling_mean_24h at row T = mean(demand[T-47 : T-23])
+        # Window covers 24h ending at T-24 (inclusive). All values ≥ 24h old.
         pos = 300
-        expected = tsta_df["demand_mw"].iloc[pos - 24 : pos].mean()
+        expected = tsta_df["demand_mw"].iloc[pos - 47 : pos - 23].mean()
         actual = tsta_df["rolling_mean_24h"].iloc[pos]
         assert actual == pytest.approx(expected, rel=1e-4)
 
-    def test_rolling_mean_168h_closed_left(self, tsta_df):
+    def test_rolling_mean_168h_anchored_at_t_minus_24(self, tsta_df):
+        # rolling_mean_168h at row T = mean(demand[T-191 : T-23])
         pos = 500
-        expected = tsta_df["demand_mw"].iloc[pos - 168 : pos].mean()
+        expected = tsta_df["demand_mw"].iloc[pos - 191 : pos - 23].mean()
         actual = tsta_df["rolling_mean_168h"].iloc[pos]
         assert actual == pytest.approx(expected, rel=1e-4)
 
-    def test_rolling_excludes_current_row(self, tsta_df):
-        # If we inject a spike at pos T, rolling_mean at T should NOT reflect it
-        # (we just verify the closed-left semantics hold via the math check above)
+    def test_rolling_excludes_last_23h(self, tsta_df):
+        # The rolling window ends at T-24, so demand at T through T-23 is NOT used.
+        # Verify by checking the math: rolling_mean_24h at T equals mean of 24 values
+        # from T-47 to T-24, not including anything more recent than T-24.
         pos = 400
-        window = tsta_df["demand_mw"].iloc[pos - 24 : pos]
+        window = tsta_df["demand_mw"].iloc[pos - 47 : pos - 23]
         assert tsta_df["rolling_mean_24h"].iloc[pos] == pytest.approx(window.mean(), rel=1e-4)
 
 
@@ -359,21 +363,22 @@ class TestParquetOutput:
 class TestRollingStats:
 
     def test_rolling_mean_24h_manual(self, tsta_df):
-        # Pick a row well into the data and verify the rolling mean manually
+        # rolling_mean_24h at T uses demand[T-47 : T-23] (24 values ending at T-24)
         pos = 500
-        expected = float(tsta_df["demand_mw"].iloc[pos - 24 : pos].mean())
+        expected = float(tsta_df["demand_mw"].iloc[pos - 47 : pos - 23].mean())
         actual = float(tsta_df["rolling_mean_24h"].iloc[pos])
         assert abs(actual - expected) < 0.1  # float32 rounding tolerance
 
     def test_rolling_std_24h_manual(self, tsta_df):
         pos = 500
-        expected = float(tsta_df["demand_mw"].iloc[pos - 24 : pos].std())
+        expected = float(tsta_df["demand_mw"].iloc[pos - 47 : pos - 23].std())
         actual = float(tsta_df["rolling_std_24h"].iloc[pos])
         assert abs(actual - expected) < 1.0  # float32 rounding tolerance
 
     def test_rolling_mean_168h_manual(self, tsta_df):
+        # rolling_mean_168h at T uses demand[T-191 : T-23] (168 values ending at T-24)
         pos = 500
-        expected = float(tsta_df["demand_mw"].iloc[pos - 168 : pos].mean())
+        expected = float(tsta_df["demand_mw"].iloc[pos - 191 : pos - 23].mean())
         actual = float(tsta_df["rolling_mean_168h"].iloc[pos])
         assert abs(actual - expected) < 0.1
 
@@ -530,13 +535,14 @@ class TestEdgeCases:
         add_lag_features(df)
         assert df["lag_24h"].iloc[100] == pytest.approx(df["demand_mw"].iloc[76])
 
-    def test_add_rolling_features_closed_left(self):
-        """rolling_mean_24h at pos T excludes the value at T."""
-        idx = pd.date_range("2020-01-01", periods=50, freq="h", tz="UTC")
-        demand = np.ones(50, dtype="float32")
-        demand[30] = 999.0  # spike at position 30
+    def test_add_rolling_features_anchored_at_t_minus_24(self):
+        """rolling_mean_24h at pos T uses demand[T-47:T-23] — ends at T-24."""
+        idx = pd.date_range("2020-01-01", periods=200, freq="h", tz="UTC")
+        demand = np.ones(200, dtype="float32")
+        demand[100] = 999.0  # spike at position 100
         df = pd.DataFrame({"demand_mw": demand}, index=idx)
         add_rolling_features(df)
-        # rolling_mean_24h at pos 30 should NOT include demand[30]=999
-        # Window is [30-24, 30) = positions 6..29 → all 1.0
-        assert df["rolling_mean_24h"].iloc[30] == pytest.approx(1.0, rel=1e-4)
+        # At T=100: window covers demand[53:77] (positions 53..76) — spike at 100 not included
+        assert df["rolling_mean_24h"].iloc[100] == pytest.approx(1.0, rel=1e-4)
+        # At T=124: window covers demand[77:101] — demand[100]=999 IS included
+        assert df["rolling_mean_24h"].iloc[124] != pytest.approx(1.0, rel=1e-1)

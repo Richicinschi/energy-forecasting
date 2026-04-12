@@ -1,14 +1,8 @@
 """
-tests/test_ml_models.py — Tests for ML models (Ridge, RF, HistGB, XGBoost, LightGBM).
-
-All tests use the same synthetic feature DataFrame as test_baselines.py so the
-fixture logic doesn't need to be duplicated at runtime — just share the helper.
+tests/test_ml_models.py — Tests for ML models (Ridge, MLP, HistGB, XGBoost, LightGBM, CatBoost).
 """
 
 from __future__ import annotations
-
-import tempfile
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -18,10 +12,11 @@ from src.evaluation.metrics import compare_models, evaluate_folds, summary_table
 from src.models.baselines import Persistence24hModel
 from src.models.ml_models import (
     ALL_MODELS,
+    CatBoostModel,
     HistGBModel,
     LightGBMModel,
     MLModel,
-    RandomForestModel,
+    MLPRegressorModel,
     RidgeModel,
     XGBoostModel,
 )
@@ -52,7 +47,6 @@ def _make_feature_df(seed: int = 42) -> pd.DataFrame:
     df["lag_24h"] = df["demand_mw"].shift(24).astype("float32")
     df["lag_168h"] = df["demand_mw"].shift(168).astype("float32")
     df["eia_forecast_mw"] = (demand + rng.normal(0, 50, n_hours)).astype("float32")
-    # Extra numeric feature to make the feature matrix slightly richer
     df["hour_sin"] = np.sin(2 * np.pi * hour_of_day / 24).astype("float32")
     df["hour_cos"] = np.cos(2 * np.pi * hour_of_day / 24).astype("float32")
     df["respondent"] = "TEST"
@@ -72,10 +66,9 @@ def feature_df():
 
 @pytest.fixture(scope="module")
 def small_df():
-    """Smaller frame for quick fit/predict tests — spans 2019-2021 to include fold -1, 0, 1."""
+    """Smaller frame covering fold -1, 0, 1 for fast fit/predict tests."""
     df = _make_feature_df()
-    # Need at least 2 years of data so both fold=-1 (2019) and fold=0 (2020) are present.
-    # 2019-01-15 + 20000 hours ≈ mid-2021, covering fold -1, 0, 1.
+    # 2019-01-15 + 20000 hours ≈ mid-2021, covering fold -1, 0, 1
     return df.iloc[:20000].copy()
 
 
@@ -91,7 +84,7 @@ def _feature_cols(df: pd.DataFrame) -> list[str]:
 
 class TestRegistry:
     def test_all_models_keys(self):
-        assert set(ALL_MODELS) == {"ridge", "rf", "hist_gb", "xgboost", "lightgbm"}
+        assert set(ALL_MODELS) == {"ridge", "mlp", "hist_gb", "xgboost", "lightgbm", "catboost"}
 
     def test_all_models_are_mlmodel_subclasses(self):
         for cls in ALL_MODELS.values():
@@ -105,7 +98,7 @@ class TestRegistry:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Interface contract (predict before fit raises, returns correct type)
+# Interface contract
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -121,11 +114,8 @@ class TestInterface:
     def test_fit_returns_self(self, model_key, small_df):
         model = ALL_MODELS[model_key]()
         fcols = _feature_cols(small_df)
-        # Use fold=-1 data only for speed
         train = small_df[small_df["fold"] == -1]
-        X = train[fcols]
-        y = train["demand_mw"]
-        returned = model.fit(X, y)
+        returned = model.fit(train[fcols], train["demand_mw"])
         assert returned is model
 
     @pytest.mark.parametrize("model_key", list(ALL_MODELS))
@@ -176,24 +166,21 @@ class TestInterface:
 
 
 class TestNaNHandling:
-    """Models that impute internally should handle NaN without raising."""
-
-    @pytest.mark.parametrize("model_key", ["ridge", "rf"])
+    @pytest.mark.parametrize("model_key", ["ridge", "mlp"])
     def test_imputing_models_handle_nan_in_train(self, model_key, small_df):
-        """Ridge and RF use SimpleImputer — NaN in train should not raise."""
+        """Ridge and MLP use SimpleImputer — NaN in train should not raise."""
         model = ALL_MODELS[model_key]()
         fcols = _feature_cols(small_df)
         train = small_df[small_df["fold"] == -1][fcols + ["demand_mw"]].copy()
-        # Inject NaN into some rows
         train.iloc[::10, 0] = np.nan
         model.fit(train[fcols], train["demand_mw"])
         val = small_df[small_df["fold"] == 0]
         preds = model.predict(val[fcols])
         assert preds.notna().all()
 
-    @pytest.mark.parametrize("model_key", ["hist_gb", "xgboost", "lightgbm"])
+    @pytest.mark.parametrize("model_key", ["hist_gb", "xgboost", "lightgbm", "catboost"])
     def test_native_nan_models_handle_nan_in_train(self, model_key, small_df):
-        """HistGB, XGBoost, LightGBM handle NaN natively."""
+        """HistGB, XGBoost, LightGBM, CatBoost handle NaN natively."""
         model = ALL_MODELS[model_key]()
         fcols = _feature_cols(small_df)
         train = small_df[small_df["fold"] == -1][fcols + ["demand_mw"]].copy()
@@ -203,9 +190,8 @@ class TestNaNHandling:
         preds = model.predict(val[fcols])
         assert preds.notna().all()
 
-    @pytest.mark.parametrize("model_key", ["hist_gb", "xgboost", "lightgbm"])
+    @pytest.mark.parametrize("model_key", ["hist_gb", "xgboost", "lightgbm", "catboost"])
     def test_native_nan_models_handle_nan_in_predict(self, model_key, small_df):
-        """HistGB, XGBoost, LightGBM should predict even when val has NaN."""
         model = ALL_MODELS[model_key]()
         fcols = _feature_cols(small_df)
         train = small_df[small_df["fold"] == -1]
@@ -222,14 +208,11 @@ class TestNaNHandling:
 
 
 class TestWalkForwardCV:
-    """evaluate_folds() should work for all models without errors."""
-
     @pytest.mark.parametrize("model_key", list(ALL_MODELS))
     def test_evaluate_folds_returns_correct_shape(self, model_key, feature_df):
         model = ALL_MODELS[model_key]()
         fcols = _feature_cols(feature_df)
         results = evaluate_folds(model, feature_df, feature_cols=fcols)
-        # Should have 5 fold rows + 1 overall row
         assert len(results) == 6
         assert "overall" in results["fold"].values
 
@@ -242,7 +225,7 @@ class TestWalkForwardCV:
         assert np.isfinite(overall["rmse"])
         assert np.isfinite(overall["mae"])
         assert np.isfinite(overall["smape"])
-        assert overall["rmse"] >= 0  # 0 is valid for a model that perfectly fits deterministic data
+        assert overall["rmse"] >= 0
 
     @pytest.mark.parametrize("model_key", list(ALL_MODELS))
     def test_evaluate_folds_model_column_is_model_name(self, model_key, feature_df):
@@ -258,20 +241,16 @@ class TestWalkForwardCV:
 
 
 class TestAccuracy:
-    """Tree models should beat Persistence24h on synthetic sinusoidal demand."""
-
     @pytest.fixture(scope="class")
     def p24_rmse(self, feature_df):
-        """RMSE of Persistence24h on the full feature_df (walk-forward)."""
         model = Persistence24hModel()
         fcols = _feature_cols(feature_df)
         results = evaluate_folds(model, feature_df, feature_cols=fcols)
         overall = results[results["fold"] == "overall"].iloc[0]
         return float(overall["rmse"])
 
-    @pytest.mark.parametrize("model_key", ["hist_gb", "xgboost", "lightgbm"])
+    @pytest.mark.parametrize("model_key", ["hist_gb", "xgboost", "lightgbm", "catboost"])
     def test_tree_models_beat_persistence24h(self, model_key, feature_df, p24_rmse):
-        """Tree models should learn the sinusoidal pattern well."""
         model = ALL_MODELS[model_key]()
         fcols = _feature_cols(feature_df)
         results = evaluate_folds(model, feature_df, feature_cols=fcols)
@@ -281,8 +260,7 @@ class TestAccuracy:
             f"Persistence24h RMSE={p24_rmse:.0f}"
         )
 
-    def test_ridge_improves_over_lag_only(self, feature_df):
-        """Ridge should at minimum produce finite, non-negative RMSE."""
+    def test_ridge_produces_finite_rmse(self, feature_df):
         model = RidgeModel()
         fcols = _feature_cols(feature_df)
         results = evaluate_folds(model, feature_df, feature_cols=fcols)
@@ -298,16 +276,13 @@ class TestAccuracy:
 
 class TestCompareModels:
     def test_compare_models_stacks_results(self, feature_df):
-        """compare_models() should produce one block per model."""
         models = [HistGBModel(), RidgeModel()]
         fcols = _feature_cols(feature_df)
         results = compare_models(models, feature_df, feature_cols=fcols)
         assert set(results["model"]) == {HistGBModel.name, RidgeModel.name}
-        # 5 fold rows + 1 overall per model = 12 rows for 2 models
-        assert len(results) == 12
+        assert len(results) == 12  # 5 folds + 1 overall per model
 
     def test_summary_table_sorted_by_rmse(self, feature_df):
-        """summary_table() should sort ascending by RMSE."""
         models = [HistGBModel(), RidgeModel()]
         fcols = _feature_cols(feature_df)
         results = compare_models(models, feature_df, feature_cols=fcols)
@@ -362,24 +337,20 @@ class TestSerialization:
 
 class TestModelParams:
     def test_ridge_custom_alpha(self, small_df):
-        fcols = _feature_cols(small_df)
-        train = small_df[small_df["fold"] == -1]
         model = RidgeModel(alpha=10.0)
-        model.fit(train[fcols], train["demand_mw"])
         assert model.alpha == 10.0
 
-    def test_rf_custom_n_estimators(self, small_df):
-        fcols = _feature_cols(small_df)
-        train = small_df[small_df["fold"] == -1]
-        model = RandomForestModel(n_estimators=10)  # fast for testing
-        model.fit(train[fcols], train["demand_mw"])
-        assert model.n_estimators == 10
+    def test_mlp_hidden_layers(self, small_df):
+        model = MLPRegressorModel(hidden_layer_sizes=(128, 64))
+        assert model.hidden_layer_sizes == (128, 64)
+
+    def test_catboost_uses_gpu(self):
+        model = CatBoostModel()
+        est = model._build_estimator()
+        assert est.get_param("task_type") == "GPU"
 
     def test_histgb_custom_lr(self, small_df):
-        fcols = _feature_cols(small_df)
-        train = small_df[small_df["fold"] == -1]
         model = HistGBModel(learning_rate=0.1, max_iter=50)
-        model.fit(train[fcols], train["demand_mw"])
         assert model.learning_rate == 0.1
 
     def test_xgboost_custom_depth(self, small_df):
@@ -390,8 +361,5 @@ class TestModelParams:
         assert model.max_depth == 4
 
     def test_lightgbm_custom_leaves(self, small_df):
-        fcols = _feature_cols(small_df)
-        train = small_df[small_df["fold"] == -1]
-        model = LightGBMModel(num_leaves=31, n_estimators=50)
-        model.fit(train[fcols], train["demand_mw"])
+        model = LightGBMModel(num_leaves=31)
         assert model.num_leaves == 31

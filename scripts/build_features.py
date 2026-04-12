@@ -31,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.data.config_loader import get_ba_codes, load_config
 from src.data.database import get_engine
-from src.features.engineer import build_features_all
+from src.features.engineer import build_features_all, build_features_for_ba
 
 
 def parse_args(argv=None):
@@ -69,6 +69,13 @@ Examples:
         action="store_true",
         help="Skip creating ALL_features.parquet",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        metavar="N",
+        help="Number of parallel BA workers (default: 1). Use -1 for all CPUs.",
+    )
     return parser.parse_args(argv)
 
 
@@ -92,11 +99,15 @@ def main(argv=None) -> int:
     print(f"\nBuilding features for {len(ba_codes)} BA(s)  ->  {output_dir}")
     print("=" * 70)
 
+    import os
+    workers = args.workers if args.workers > 0 else os.cpu_count()
+    
     build_features_all(
         engine=engine,
         ba_codes=ba_codes,
         output_dir=output_dir,
         combined=not args.no_combined,
+        workers=workers,
     )
 
     return 0

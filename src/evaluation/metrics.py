@@ -31,18 +31,22 @@ import pandas as pd
 
 
 def mae(y_true: np.ndarray | pd.Series, y_pred: np.ndarray | pd.Series) -> float:
-    """Mean Absolute Error."""
+    """Mean Absolute Error. Returns nan if no valid pairs."""
     y_true = np.asarray(y_true, dtype=float)
     y_pred = np.asarray(y_pred, dtype=float)
     mask = np.isfinite(y_true) & np.isfinite(y_pred)
+    if not mask.any():
+        return float("nan")
     return float(np.mean(np.abs(y_true[mask] - y_pred[mask])))
 
 
 def rmse(y_true: np.ndarray | pd.Series, y_pred: np.ndarray | pd.Series) -> float:
-    """Root Mean Squared Error."""
+    """Root Mean Squared Error. Returns nan if no valid pairs."""
     y_true = np.asarray(y_true, dtype=float)
     y_pred = np.asarray(y_pred, dtype=float)
     mask = np.isfinite(y_true) & np.isfinite(y_pred)
+    if not mask.any():
+        return float("nan")
     return float(np.sqrt(np.mean((y_true[mask] - y_pred[mask]) ** 2)))
 
 
@@ -52,11 +56,14 @@ def smape(y_true: np.ndarray | pd.Series, y_pred: np.ndarray | pd.Series) -> flo
     sMAPE = 100 * mean(2 * |y - ŷ| / (|y| + |ŷ|))
 
     Rows where both y_true and y_pred are zero are excluded to avoid 0/0.
+    Returns nan if no valid pairs.
     """
     y_true = np.asarray(y_true, dtype=float)
     y_pred = np.asarray(y_pred, dtype=float)
     denom = np.abs(y_true) + np.abs(y_pred)
     mask = np.isfinite(y_true) & np.isfinite(y_pred) & (denom > 0)
+    if not mask.any():
+        return float("nan")
     return float(100.0 * np.mean(2.0 * np.abs(y_true[mask] - y_pred[mask]) / denom[mask]))
 
 
